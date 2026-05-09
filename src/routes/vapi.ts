@@ -27,7 +27,10 @@ router.post('/webhook', async (req: Request, res: Response) => {
     // Vapi calls this when a new call starts and no assistantId is set on the phone number.
     // Returns full assistant config — system prompt, model, voice, tools.
     case 'assistant-request': {
-      res.json({ assistant: getVapiAssistantConfig() });
+      const customer = message.call?.customer as
+        | { name?: string; email?: string; number?: string }
+        | undefined;
+      res.json({ assistant: getVapiAssistantConfig(customer) });
       return;
     }
 

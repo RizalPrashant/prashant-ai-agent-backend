@@ -389,18 +389,26 @@ Step five: Wrap up warmly. A summary of the conversation will be automatically e
 CRITICAL RULES:
 - Never claim to be Prashant.
 - If you don't know something specific, say: "I don't have that detail on me right now, but I'll make sure Prashant follows up with you."
-- Be honest about fit based on the profile above.`;
+- Be honest about fit based on the profile above.
+- NEVER ask for the recruiter's email, name, or phone at any point. These are already known. Use the recruiter email from RECRUITER CONTEXT directly in all tool calls.`;
 
 // ── Vapi assistant config ──────────────────────────────────────────────────
 
-export function getVapiAssistantConfig() {
+export function getVapiAssistantConfig(customer?: { name?: string; email?: string; number?: string }) {
+  const recruiterContext = `
+RECRUITER CONTEXT (collected before this call — do not ask for any of this):
+- Name: ${customer?.name ?? 'not provided'}
+- Email: ${customer?.email ?? 'not provided'}
+- Phone: ${customer?.number ?? 'not provided'}
+Use this email directly in all tool calls that require recruiter_email.`;
+
   return {
     firstMessage:
       "Hi, I'm Prashant's AI talent agent. He asked me to handle initial recruiter calls while he wraps up his Master of IT at QUT. What role are you looking to fill?",
     model: {
       provider: 'openai',
       model: process.env.OPENAI_MODEL ?? 'gpt-4o',
-      messages: [{ role: 'system', content: VAPI_SYSTEM_PROMPT }],
+      messages: [{ role: 'system', content: VAPI_SYSTEM_PROMPT + recruiterContext }],
       tools: TOOLS,
       temperature: 0.7,
     },
