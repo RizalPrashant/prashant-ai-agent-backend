@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "WebFetch(domain:medium.com)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
