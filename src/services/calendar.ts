@@ -48,7 +48,6 @@ export async function scheduleCalendarEvent(opts: {
         description: `Scheduled via Prashant's AI Talent Agent.\n\nRecruiter: ${opts.recruiterName ?? opts.recruiterEmail}`,
         start: { dateTime: startDt.toISOString(), timeZone: 'Australia/Brisbane' },
         end: { dateTime: endDt.toISOString(), timeZone: 'Australia/Brisbane' },
-        attendees: prashantEmail ? [{ email: prashantEmail }] : [],
         conferenceData: {
           createRequest: { requestId: `prashant-agent-${Date.now()}` },
         },
@@ -77,13 +76,20 @@ export async function scheduleCalendarEvent(opts: {
       meet_link: meetLink,
     });
 
-    // Email the recruiter the Meet link since service accounts can't add external attendees
-    if (meetLink) {
-      const dateStr = startDt.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'full', timeStyle: 'short' });
+    // Email both parties the Meet link (service accounts can't add attendees)
+    const dateStr = startDt.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'full', timeStyle: 'short' });
+    const meetingSummary = `A meeting has been scheduled with Prashant Rizal.\n\nTopic: ${topic}\nDate: ${dateStr} (Brisbane time)\nDuration: ${opts.durationMinutes ?? 30} minutes${meetLink ? `\n\nGoogle Meet link: ${meetLink}` : ''}`;
+
+    await sendSummaryEmail({
+      to: opts.recruiterEmail,
+      recruiterName: opts.recruiterName,
+      summary: meetingSummary,
+    });
+
+    if (prashantEmail) {
       await sendSummaryEmail({
-        to: opts.recruiterEmail,
-        recruiterName: opts.recruiterName,
-        summary: `A meeting has been scheduled with Prashant Rizal.\n\nTopic: ${topic}\nDate: ${dateStr} (Brisbane time)\nDuration: ${opts.durationMinutes ?? 30} minutes\n\nGoogle Meet link: ${meetLink}`,
+        to: prashantEmail,
+        summary: `Meeting scheduled with ${opts.recruiterName ?? opts.recruiterEmail}.\n\n${meetingSummary}`,
       });
     }
 
