@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { saveScheduledEvent } from '../db';
+import { sendSummaryEmail } from './email';
 
 export interface CalendarResult {
   success: boolean;
@@ -47,10 +48,7 @@ export async function scheduleCalendarEvent(opts: {
         description: `Scheduled via Prashant's AI Talent Agent.\n\nRecruiter: ${opts.recruiterName ?? opts.recruiterEmail}`,
         start: { dateTime: startDt.toISOString(), timeZone: 'Australia/Brisbane' },
         end: { dateTime: endDt.toISOString(), timeZone: 'Australia/Brisbane' },
-        attendees: [
-          ...(prashantEmail ? [{ email: prashantEmail }] : []),
-          { email: opts.recruiterEmail },
-        ],
+        attendees: prashantEmail ? [{ email: prashantEmail }] : [],
         conferenceData: {
           createRequest: { requestId: `prashant-agent-${Date.now()}` },
         },
@@ -78,6 +76,16 @@ export async function scheduleCalendarEvent(opts: {
       google_event_id: event.data.id ?? undefined,
       meet_link: meetLink,
     });
+
+    // Email the recruiter the Meet link since service accounts can't add external attendees
+    if (meetLink) {
+      const dateStr = startDt.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'full', timeStyle: 'short' });
+      await sendSummaryEmail({
+        to: opts.recruiterEmail,
+        recruiterName: opts.recruiterName,
+        summary: `A meeting has been scheduled with Prashant Rizal.\n\nTopic: ${topic}\nDate: ${dateStr} (Brisbane time)\nDuration: ${opts.durationMinutes ?? 30} minutes\n\nGoogle Meet link: ${meetLink}`,
+      });
+    }
 
     return {
       success: true,
