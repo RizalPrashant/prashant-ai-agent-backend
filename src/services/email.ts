@@ -1,16 +1,12 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-function createTransport() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT ?? '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) throw new Error('RESEND_API_KEY not set');
+  return new Resend(key);
 }
+
+const FROM = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
 
 export interface EmailResult {
   success: boolean;
@@ -25,18 +21,17 @@ export async function sendSummaryEmail(opts: {
   roleDiscussed?: string;
   summary: string;
 }): Promise<EmailResult> {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[email] SMTP not configured — skipping send');
-    return { success: false, error: 'SMTP not configured' };
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[email] RESEND_API_KEY not set — skipping send');
+    return { success: false, error: 'Email not configured' };
   }
 
   const prashantEmail = process.env.PRASHANT_EMAIL ?? '';
   const greeting = opts.recruiterName ? `Hi ${opts.recruiterName},` : 'Hi,';
-  const roleNote = opts.roleDiscussed ? ` for the **${opts.roleDiscussed}** role` : '';
+  const roleNote = opts.roleDiscussed ? ` for the <strong>${opts.roleDiscussed}</strong> role` : '';
   const companyNote = opts.company ? ` at ${opts.company}` : '';
 
-  const htmlBody = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -61,19 +56,22 @@ export async function sendSummaryEmail(opts: {
     Prashant Rizal · QUT Master of IT (graduating June 2026) · Brisbane, Australia
   </div>
 </body>
-</html>
-`;
+</html>`;
 
   try {
-    const transport = createTransport();
-    const info = await transport.sendMail({
-      from: process.env.EMAIL_FROM ?? process.env.SMTP_USER,
-      to: [opts.to, prashantEmail].filter(Boolean).join(', '),
+    const resend = getResend();
+    const to = [opts.to, prashantEmail].filter(Boolean);
+    const { data, error } = await resend.emails.send({
+      from: FROM,
+      to,
       subject: `Conversation Summary — Prashant Rizal${opts.roleDiscussed ? ` (${opts.roleDiscussed})` : ''}`,
-      html: htmlBody,
-      text: `${greeting}\n\nHere's a summary of our conversation${roleNote}${companyNote}:\n\n${opts.summary}\n\nPrashant Rizal · QUT Master of IT (graduating June 2026) · Brisbane, Australia`,
+      html,
     });
-    return { success: true, messageId: info.messageId };
+    if (error) {
+      console.error('[email] resend error:', error);
+      return { success: false, error: (error as { message?: string }).message ?? String(error) };
+    }
+    return { success: true, messageId: data?.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[email] send failed:', msg);
@@ -89,8 +87,8 @@ export async function sendCallNotificationToPrashant(opts: {
   recruiterEmail?: string;
   company?: string;
 }): Promise<EmailResult> {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    return { success: false, error: 'SMTP not configured' };
+  if (!process.env.RESEND_API_KEY) {
+    return { success: false, error: 'Email not configured' };
   }
 
   const prashantEmail = process.env.PRASHANT_EMAIL ?? '';
@@ -99,8 +97,7 @@ export async function sendCallNotificationToPrashant(opts: {
   const who = [opts.recruiterName, opts.company].filter(Boolean).join(' @ ') || 'Unknown caller';
   const endNote = opts.endedReason ? ` (ended: ${opts.endedReason})` : '';
 
-  const htmlBody = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -112,7 +109,7 @@ export async function sendCallNotificationToPrashant(opts: {
   </style>
 </head>
 <body>
-  <h2>📞 Voice Call Ended — ${who}${endNote}</h2>
+  <h2>Voice Call Ended — ${who}${endNote}</h2>
   ${opts.recruiterEmail ? `<p><strong>Recruiter email:</strong> ${opts.recruiterEmail}</p>` : ''}
   ${opts.summary ? `<h3>Summary</h3><div class="block">${opts.summary.replace(/\n/g, '<br>')}</div>` : ''}
   ${opts.transcript ? `<h3>Transcript</h3><div class="block">${opts.transcript.replace(/\n/g, '<br>')}</div>` : ''}
@@ -121,15 +118,18 @@ export async function sendCallNotificationToPrashant(opts: {
 </html>`;
 
   try {
-    const transport = createTransport();
-    const info = await transport.sendMail({
-      from: process.env.EMAIL_FROM ?? process.env.SMTP_USER,
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from: FROM,
       to: prashantEmail,
-      subject: `📞 Voice call from ${who}`,
-      html: htmlBody,
-      text: `Voice call ended: ${who}${endNote}\n\n${opts.summary ?? ''}\n\n${opts.transcript ?? ''}`,
+      subject: `Voice call from ${who}`,
+      html,
     });
-    return { success: true, messageId: info.messageId };
+    if (error) {
+      console.error('[email] resend notification error:', error);
+      return { success: false, error: (error as { message?: string }).message ?? String(error) };
+    }
+    return { success: true, messageId: data?.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[email] call notification failed:', msg);
