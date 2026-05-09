@@ -9,7 +9,14 @@ import {
 import { sendSummaryEmail } from './services/email';
 import { scheduleCalendarEvent } from './services/calendar';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set — chat route unavailable');
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 
 // ── Prashant's profile ─────────────────────────────────────────────────────
 
@@ -279,7 +286,7 @@ export async function processMessage(
 
   // Agentic loop — resolves all tool calls within a single HTTP request
   while (true) {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: process.env.OPENAI_MODEL ?? 'gpt-4o',
       messages,
       tools: TOOLS,
